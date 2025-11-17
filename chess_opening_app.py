@@ -142,49 +142,49 @@ moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
 if 'move_index' not in st.session_state:
     st.session_state.move_index = 0
 
-# Navigation controls at the top - compact for mobile
+# Navigation controls - all in one compact row
 st.markdown("### 🎮 Move Navigation")
-nav_col1, nav_col2 = st.columns([3, 1])
 
-with nav_col1:
-    # Slider for quick navigation
-    new_index = st.slider(
-        "Move",
-        0,
-        len(moves_only) - 1,
-        st.session_state.move_index,
-        label_visibility="collapsed"
-    )
-    if new_index != st.session_state.move_index:
-        st.session_state.move_index = new_index
+# Single row with buttons and slider
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 4, 1, 1, 1])
 
-with nav_col2:
-    st.markdown(f"**{st.session_state.move_index + 1}/{len(moves_only)}**")
-
-# Compact button row
-button_col1, button_col2, button_col3, button_col4 = st.columns(4)
-
-with button_col1:
-    if st.button("⏮️", help="Start", use_container_width=True):
+with col1:
+    if st.button("⏮️", key="start", help="Start"):
         st.session_state.move_index = 0
         st.rerun()
 
-with button_col2:
-    if st.button("◀️", help="Previous", use_container_width=True):
+with col2:
+    if st.button("◀️", key="prev", help="Previous"):
         if st.session_state.move_index > 0:
             st.session_state.move_index -= 1
             st.rerun()
 
-with button_col3:
-    if st.button("▶️", help="Next", use_container_width=True):
+with col3:
+    # Slider in the middle
+    new_index = st.slider(
+        f"Move {st.session_state.move_index + 1} of {len(moves_only)}",
+        0,
+        len(moves_only) - 1,
+        st.session_state.move_index,
+        label_visibility="visible"
+    )
+    if new_index != st.session_state.move_index:
+        st.session_state.move_index = new_index
+
+with col4:
+    if st.button("▶️", key="next", help="Next"):
         if st.session_state.move_index < len(moves_only) - 1:
             st.session_state.move_index += 1
             st.rerun()
 
-with button_col4:
-    if st.button("⏭️", help="End", use_container_width=True):
+with col5:
+    if st.button("⏭️", key="end", help="End"):
         st.session_state.move_index = len(moves_only) - 1
         st.rerun()
+
+with col6:
+    # Current move display
+    st.markdown(f"**{st.session_state.move_index + 1}/{len(moves_only)}**")
 
 st.markdown("---")
 
