@@ -142,49 +142,71 @@ moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
 if 'move_index' not in st.session_state:
     st.session_state.move_index = 0
 
-# Navigation controls - all in one compact row
+# Navigation controls - compact for mobile
 st.markdown("### 🎮 Move Navigation")
+st.markdown(f"**Move {st.session_state.move_index + 1} of {len(moves_only)}**")
 
-# Single row with buttons and slider
-col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 4, 1, 1, 1])
+# Navigation buttons in a single HTML row for guaranteed horizontal layout
+button_html = f"""
+<style>
+.nav-buttons {{
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    margin-bottom: 10px;
+}}
+.nav-buttons button {{
+    flex: 1;
+    padding: 10px;
+    font-size: 20px;
+    background-color: #262730;
+    color: white;
+    border: 1px solid #464646;
+    border-radius: 5px;
+    cursor: pointer;
+}}
+.nav-buttons button:hover {{
+    background-color: #464646;
+}}
+</style>
+"""
+st.markdown(button_html, unsafe_allow_html=True)
 
-with col1:
-    if st.button("⏮️", key="start", help="Start"):
+# Actual buttons using Streamlit columns with gap control
+btn_cols = st.columns([1, 1, 1, 1], gap="small")
+
+with btn_cols[0]:
+    if st.button("⏮️ Start", key="start", use_container_width=True):
         st.session_state.move_index = 0
         st.rerun()
 
-with col2:
-    if st.button("◀️", key="prev", help="Previous"):
+with btn_cols[1]:
+    if st.button("◀️ Prev", key="prev", use_container_width=True):
         if st.session_state.move_index > 0:
             st.session_state.move_index -= 1
             st.rerun()
 
-with col3:
-    # Slider in the middle
-    new_index = st.slider(
-        f"Move {st.session_state.move_index + 1} of {len(moves_only)}",
-        0,
-        len(moves_only) - 1,
-        st.session_state.move_index,
-        label_visibility="visible"
-    )
-    if new_index != st.session_state.move_index:
-        st.session_state.move_index = new_index
-
-with col4:
-    if st.button("▶️", key="next", help="Next"):
+with btn_cols[2]:
+    if st.button("Next ▶️", key="next", use_container_width=True):
         if st.session_state.move_index < len(moves_only) - 1:
             st.session_state.move_index += 1
             st.rerun()
 
-with col5:
-    if st.button("⏭️", key="end", help="End"):
+with btn_cols[3]:
+    if st.button("End ⏭️", key="end", use_container_width=True):
         st.session_state.move_index = len(moves_only) - 1
         st.rerun()
 
-with col6:
-    # Current move display
-    st.markdown(f"**{st.session_state.move_index + 1}/{len(moves_only)}**")
+# Slider below buttons for precise control
+new_index = st.slider(
+    "Jump to move",
+    0,
+    len(moves_only) - 1,
+    st.session_state.move_index,
+    label_visibility="collapsed"
+)
+if new_index != st.session_state.move_index:
+    st.session_state.move_index = new_index
 
 st.markdown("---")
 
