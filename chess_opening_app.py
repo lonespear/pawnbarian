@@ -2,6 +2,7 @@ import streamlit as st
 import chess
 import chess.svg
 import re
+import time
 
 # Page configuration
 st.set_page_config(
@@ -141,6 +142,8 @@ moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
 # Initialize session state
 if 'move_index' not in st.session_state:
     st.session_state.move_index = 0
+if 'auto_play' not in st.session_state:
+    st.session_state.auto_play = False
 
 # Navigation controls - compact for mobile
 st.markdown("### 🎮 Move Navigation")
@@ -232,6 +235,39 @@ try:
 except Exception as e:
     st.error(f"Error displaying board: {e}")
     st.text("Board display requires valid chess moves")
+
+# Auto-play controls below the board
+auto_col1, auto_col2 = st.columns([1, 3])
+
+with auto_col1:
+    if st.session_state.auto_play:
+        if st.button("⏸️ Pause", key="pause_auto", use_container_width=True):
+            st.session_state.auto_play = False
+            st.rerun()
+    else:
+        if st.button("▶️ Auto Play", key="start_auto", use_container_width=True):
+            st.session_state.auto_play = True
+            st.rerun()
+
+with auto_col2:
+    speed = st.select_slider(
+        "Speed",
+        options=[0.5, 1.0, 1.5, 2.0, 3.0],
+        value=1.5,
+        format_func=lambda x: f"{x}s per move",
+        label_visibility="collapsed"
+    )
+
+# Auto-play logic
+if st.session_state.auto_play:
+    if st.session_state.move_index < len(moves_only) - 1:
+        time.sleep(speed)
+        st.session_state.move_index += 1
+        st.rerun()
+    else:
+        # Reached the end, stop auto-play
+        st.session_state.auto_play = False
+        st.rerun()
 
 st.markdown("---")
 
