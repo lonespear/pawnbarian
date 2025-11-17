@@ -1,6 +1,7 @@
 import streamlit as st
 import chess
 import chess.svg
+import re
 
 # Page configuration
 st.set_page_config(page_title="Chess Opening Explorer", layout="wide")
@@ -147,9 +148,11 @@ with col2:
 
     # Parse moves
     moves_str = opening_data["moves"]
-    # Simple parsing - split by spaces and filter move numbers
-    move_tokens = moves_str.split()
-    moves_only = [m for m in move_tokens if not m.endswith('.')]
+    # Use regex to extract only the actual moves, removing move numbers
+    # Pattern: remove anything like "1." or "10." etc.
+    moves_str_clean = re.sub(r'\d+\.', '', moves_str)
+    # Split by spaces and filter empty strings
+    moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
 
     # Initialize session state
     if 'move_index' not in st.session_state:
