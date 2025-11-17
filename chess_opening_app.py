@@ -4,7 +4,11 @@ import chess.svg
 import re
 
 # Page configuration
-st.set_page_config(page_title="Chess Opening Explorer", layout="wide")
+st.set_page_config(
+    page_title="Chess Opening Explorer",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # Opening repertoire data
 OPENINGS = {
@@ -126,64 +130,65 @@ opening_data = OPENINGS[opening_choice]
 # Display opening name
 st.header(opening_choice)
 
-# Create two columns
-col1, col2 = st.columns([1, 1])
+# Parse moves first (needed for navigation)
+moves_str = opening_data["moves"]
+# Use regex to extract only the actual moves, removing move numbers
+# Pattern: remove anything like "1." or "10." etc.
+moves_str_clean = re.sub(r'\d+\.', '', moves_str)
+# Split by spaces and filter empty strings
+moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
 
-with col1:
-    st.subheader("🎯 Key Ideas")
-    for idea in opening_data["key_ideas"]:
-        st.markdown(f"- {idea}")
+# Initialize session state
+if 'move_index' not in st.session_state:
+    st.session_state.move_index = 0
 
-    st.markdown("---")
-    st.subheader("📋 Your Plan")
-    st.info(opening_data["plan"])
+# Navigation controls at the top - compact for mobile
+st.markdown("### 🎮 Move Navigation")
+nav_col1, nav_col2 = st.columns([3, 1])
 
-with col2:
-    st.subheader("♟️ Main Line Moves")
-    st.code(opening_data["moves"], language=None)
+with nav_col1:
+    # Slider for quick navigation
+    new_index = st.slider(
+        "Move",
+        0,
+        len(moves_only) - 1,
+        st.session_state.move_index,
+        label_visibility="collapsed"
+    )
+    if new_index != st.session_state.move_index:
+        st.session_state.move_index = new_index
 
-    # Move navigation
-    st.markdown("---")
-    st.subheader("Navigate Through Moves")
+with nav_col2:
+    st.markdown(f"**{st.session_state.move_index + 1}/{len(moves_only)}**")
 
-    # Parse moves
-    moves_str = opening_data["moves"]
-    # Use regex to extract only the actual moves, removing move numbers
-    # Pattern: remove anything like "1." or "10." etc.
-    moves_str_clean = re.sub(r'\d+\.', '', moves_str)
-    # Split by spaces and filter empty strings
-    moves_only = [m.strip() for m in moves_str_clean.split() if m.strip()]
+# Compact button row
+button_col1, button_col2, button_col3, button_col4 = st.columns(4)
 
-    # Initialize session state
-    if 'move_index' not in st.session_state:
+with button_col1:
+    if st.button("⏮️", help="Start", use_container_width=True):
         st.session_state.move_index = 0
+        st.rerun()
 
-    # Navigation buttons
-    button_col1, button_col2, button_col3, button_col4 = st.columns(4)
+with button_col2:
+    if st.button("◀️", help="Previous", use_container_width=True):
+        if st.session_state.move_index > 0:
+            st.session_state.move_index -= 1
+            st.rerun()
 
-    with button_col1:
-        if st.button("⏮️ Start"):
-            st.session_state.move_index = 0
+with button_col3:
+    if st.button("▶️", help="Next", use_container_width=True):
+        if st.session_state.move_index < len(moves_only) - 1:
+            st.session_state.move_index += 1
+            st.rerun()
 
-    with button_col2:
-        if st.button("◀️ Previous"):
-            if st.session_state.move_index > 0:
-                st.session_state.move_index -= 1
+with button_col4:
+    if st.button("⏭️", help="End", use_container_width=True):
+        st.session_state.move_index = len(moves_only) - 1
+        st.rerun()
 
-    with button_col3:
-        if st.button("▶️ Next"):
-            if st.session_state.move_index < len(moves_only) - 1:
-                st.session_state.move_index += 1
-
-    with button_col4:
-        if st.button("⏭️ End"):
-            st.session_state.move_index = len(moves_only) - 1
-
-    # Display current move
-    st.markdown(f"**Move {st.session_state.move_index + 1} of {len(moves_only)}**")
+st.markdown("---")
 
 # Board visualization section
-st.markdown("---")
 st.subheader("♟️ Board Position")
 
 # Create board and apply moves
@@ -194,24 +199,36 @@ try:
     for move in moves_to_apply:
         board.push_san(move)
 
-    # Display board
-    board_svg = chess.svg.board(board, size=400)
-    st.image(board_svg, use_container_width=False)
+    # Display board - responsive sizing
+    board_svg = chess.svg.board(board, size=450)
+    st.image(board_svg, use_container_width=True)
 
-    # Show current position in FEN
-    with st.expander("Technical Details"):
-        st.text(f"FEN: {board.fen()}")
-        st.text(f"Moves played: {' '.join(moves_to_apply)}")
+    # Show moves played
+    if moves_to_apply:
+        st.caption(f"Moves: {' '.join(moves_to_apply)}")
 
 except Exception as e:
     st.error(f"Error displaying board: {e}")
     st.text("Board display requires valid chess moves")
 
+st.markdown("---")
+
+# Collapsible sections for ideas and plan - better for mobile
+with st.expander("🎯 Key Ideas", expanded=False):
+    for idea in opening_data["key_ideas"]:
+        st.markdown(f"- {idea}")
+
+with st.expander("📋 Your Plan", expanded=False):
+    st.info(opening_data["plan"])
+
+with st.expander("♟️ Full Move Sequence", expanded=False):
+    st.code(opening_data["moves"], language=None)
+
+with st.expander("⚙️ Technical Details", expanded=False):
+    st.text(f"FEN: {board.fen()}")
+
 # Footer
 st.markdown("---")
-st.markdown("""
-**Remember:**
-- Understanding beats memorization
-- Don't hang pieces - tactics are still #1 priority
-- In 8 weeks, you should reach moves 12-15 without thinking hard
+st.caption("""
+**Remember:** Understanding beats memorization • Don't hang pieces - tactics are still #1 priority
 """)
