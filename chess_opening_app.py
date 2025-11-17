@@ -173,26 +173,26 @@ button_html = f"""
 st.markdown(button_html, unsafe_allow_html=True)
 
 # Actual buttons using Streamlit columns with gap control
-btn_cols = st.columns([1, 1, 1, 1], gap="small")
+btn_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1], gap="small")
 
 with btn_cols[0]:
     if st.button("⏮️ Start", key="start", use_container_width=True):
         st.session_state.move_index = 0
         st.rerun()
 
-with btn_cols[1]:
+with btn_cols[2]:
     if st.button("◀️ Prev", key="prev", use_container_width=True):
         if st.session_state.move_index > 0:
             st.session_state.move_index -= 1
             st.rerun()
 
-with btn_cols[2]:
+with btn_cols[4]:
     if st.button("Next ▶️", key="next", use_container_width=True):
         if st.session_state.move_index < len(moves_only) - 1:
             st.session_state.move_index += 1
             st.rerun()
 
-with btn_cols[3]:
+with btn_cols[6]:
     if st.button("End ⏭️", key="end", use_container_width=True):
         st.session_state.move_index = len(moves_only) - 1
         st.rerun()
