@@ -3,13 +3,76 @@ import chess
 import chess.svg
 import re
 import time
+import random
+import json
+from pathlib import Path
+from datetime import datetime, timedelta
 
 # Page configuration
 st.set_page_config(
-    page_title="Chess Opening Explorer",
+    page_title="Chess Opening Memorization Trainer",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Progress tracking file
+PROGRESS_FILE = Path.home() / ".chess_opening_progress.json"
+
+def load_progress():
+    """Load progress data from file"""
+    if PROGRESS_FILE.exists():
+        try:
+            with open(PROGRESS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_progress(progress):
+    """Save progress data to file"""
+    with open(PROGRESS_FILE, 'w') as f:
+        json.dump(progress, f, indent=2)
+
+def get_opening_status(opening_name, progress):
+    """Get the status of an opening"""
+    if opening_name not in progress:
+        progress[opening_name] = {
+            'mastered': False,
+            'last_reviewed': None,
+            'review_count': 0
+        }
+    return progress[opening_name]
+
+def update_review(opening_name, progress):
+    """Update review timestamp"""
+    status = get_opening_status(opening_name, progress)
+    status['last_reviewed'] = datetime.now().isoformat()
+    status['review_count'] += 1
+    save_progress(progress)
+
+def toggle_mastered(opening_name, progress):
+    """Toggle mastered status"""
+    status = get_opening_status(opening_name, progress)
+    status['mastered'] = not status['mastered']
+    save_progress(progress)
+
+def should_review(opening_name, progress):
+    """Check if opening should be reviewed (spaced repetition)"""
+    status = get_opening_status(opening_name, progress)
+    if status['mastered']:
+        return False
+    if status['last_reviewed'] is None:
+        return True
+
+    last_review = datetime.fromisoformat(status['last_reviewed'])
+    review_count = status['review_count']
+
+    # Spaced repetition intervals: 1 day, 3 days, 7 days, 14 days, 30 days
+    intervals = [1, 3, 7, 14, 30]
+    interval_index = min(review_count, len(intervals) - 1)
+    next_review = last_review + timedelta(days=intervals[interval_index])
+
+    return datetime.now() >= next_review
 
 # Opening repertoire data
 OPENINGS = {
@@ -89,27 +152,57 @@ OPENINGS = {
     }
 }
 
+# Load progress
+progress = load_progress()
+
 # Title and introduction
-st.title("♟️ Chess Opening Explorer")
-st.markdown("### Interactive guide to your personalized opening repertoire")
+st.title("♟️ Chess Opening Memorization Trainer")
+st.markdown("### Master your opening repertoire through active practice")
 st.markdown("---")
 
 # Sidebar for opening selection
 with st.sidebar:
     st.header("Your Repertoire")
 
+    # Mode selection
+    mode = st.radio(
+        "Training Mode:",
+        ["📖 Study", "🎯 Quiz", "🎲 Random Test"],
+        help="Study: View moves step by step | Quiz: Guess next move | Random Test: Jump to random positions"
+    )
+
+    st.markdown("---")
+
     st.subheader("As White")
     white_openings = [k for k in OPENINGS.keys() if k.startswith("White")]
+    for opening in white_openings:
+        status = get_opening_status(opening, progress)
+        check = "✅" if status['mastered'] else "⬜"
+        needs_review = "🔔" if should_review(opening, progress) else ""
+        st.markdown(f"{check} {needs_review} {opening.replace('White - ', '')}")
 
     st.subheader("As Black vs 1.e4")
     black_e4_openings = [k for k in OPENINGS.keys() if "Caro-Kann" in k]
+    for opening in black_e4_openings:
+        status = get_opening_status(opening, progress)
+        check = "✅" if status['mastered'] else "⬜"
+        needs_review = "🔔" if should_review(opening, progress) else ""
+        st.markdown(f"{check} {needs_review} {opening.replace('Black - ', '')}")
 
     st.subheader("As Black vs 1.d4")
     black_d4_openings = [k for k in OPENINGS.keys() if k.startswith("Black") and "Caro-Kann" not in k]
+    for opening in black_d4_openings:
+        status = get_opening_status(opening, progress)
+        check = "✅" if status['mastered'] else "⬜"
+        needs_review = "🔔" if should_review(opening, progress) else ""
+        st.markdown(f"{check} {needs_review} {opening.replace('Black - ', '')}")
+
+    st.markdown("---")
 
     selected_category = st.radio(
         "Select category:",
-        ["White Openings", "Black vs 1.e4", "Black vs 1.d4"]
+        ["White Openings", "Black vs 1.e4", "Black vs 1.d4"],
+        label_visibility="collapsed"
     )
 
     if selected_category == "White Openings":
@@ -120,10 +213,21 @@ with st.sidebar:
         opening_choice = st.selectbox("Choose opening:", black_d4_openings)
 
     st.markdown("---")
-    st.markdown("**Study Tips:**")
-    st.markdown("- Focus on understanding, not memorizing")
-    st.markdown("- Play 3 games for every 1 hour of study")
-    st.markdown("- Review your games")
+
+    # Progress controls
+    status = get_opening_status(opening_choice, progress)
+    if st.button("✅ Toggle Mastered" if not status['mastered'] else "⬜ Mark as Learning"):
+        toggle_mastered(opening_choice, progress)
+        st.rerun()
+
+    if status['last_reviewed']:
+        last_review = datetime.fromisoformat(status['last_reviewed'])
+        st.caption(f"Last reviewed: {last_review.strftime('%Y-%m-%d')}")
+        st.caption(f"Review count: {status['review_count']}")
+
+    st.markdown("---")
+    st.markdown("**Legend:**")
+    st.markdown("✅ Mastered | 🔔 Due for review")
 
 # Main content
 opening_data = OPENINGS[opening_choice]
@@ -144,149 +248,285 @@ if 'move_index' not in st.session_state:
     st.session_state.move_index = 0
 if 'auto_play' not in st.session_state:
     st.session_state.auto_play = False
+if 'quiz_mode_active' not in st.session_state:
+    st.session_state.quiz_mode_active = False
+if 'quiz_correct' not in st.session_state:
+    st.session_state.quiz_correct = 0
+if 'quiz_total' not in st.session_state:
+    st.session_state.quiz_total = 0
+if 'show_answer' not in st.session_state:
+    st.session_state.show_answer = False
+if 'user_guess' not in st.session_state:
+    st.session_state.user_guess = ""
+if 'random_test_index' not in st.session_state:
+    st.session_state.random_test_index = None
 
-# Navigation controls - compact for mobile
-st.markdown("### 🎮 Move Navigation")
-st.markdown(f"**Move {st.session_state.move_index + 1} of {len(moves_only)}**")
+# Update review when studying this opening
+update_review(opening_choice, progress)
 
-# Navigation buttons in a single HTML row for guaranteed horizontal layout
-button_html = f"""
-<style>
-.nav-buttons {{
-    display: flex;
-    justify-content: space-between;
-    gap: 5px;
-    margin-bottom: 10px;
-}}
-.nav-buttons button {{
-    flex: 1;
-    padding: 10px;
-    font-size: 20px;
-    background-color: #262730;
-    color: white;
-    border: 1px solid #464646;
-    border-radius: 5px;
-    cursor: pointer;
-}}
-.nav-buttons button:hover {{
-    background-color: #464646;
-}}
-</style>
-"""
-st.markdown(button_html, unsafe_allow_html=True)
+# RANDOM TEST MODE
+if mode == "🎲 Random Test":
+    st.markdown("### 🎲 Random Position Test")
 
-# Actual buttons using Streamlit columns with gap control
-btn_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1], gap="small")
+    if st.button("🎲 Generate Random Position"):
+        st.session_state.random_test_index = random.randint(1, len(moves_only) - 1)
+        st.session_state.show_answer = False
+        st.session_state.user_guess = ""
 
-with btn_cols[0]:
-    if st.button("⏮️ Start", key="start", use_container_width=True):
-        st.session_state.move_index = 0
-        st.rerun()
+    if st.session_state.random_test_index is not None:
+        test_index = st.session_state.random_test_index
 
-with btn_cols[2]:
-    if st.button("◀️ Prev", key="prev", use_container_width=True):
-        if st.session_state.move_index > 0:
-            st.session_state.move_index -= 1
-            st.rerun()
+        # Show position before the test move
+        board = chess.Board()
+        for move in moves_only[:test_index]:
+            board.push_san(move)
 
-with btn_cols[4]:
-    if st.button("Next ▶️", key="next", use_container_width=True):
-        if st.session_state.move_index < len(moves_only) - 1:
-            st.session_state.move_index += 1
-            st.rerun()
+        st.markdown(f"**Position after move {test_index}. What's the next move?**")
 
-with btn_cols[6]:
-    if st.button("End ⏭️", key="end", use_container_width=True):
-        st.session_state.move_index = len(moves_only) - 1
-        st.rerun()
+        board_svg = chess.svg.board(board, size=450)
+        st.image(board_svg, use_container_width=True)
 
-# Slider below buttons for precise control
-new_index = st.slider(
-    "Jump to move",
-    0,
-    len(moves_only) - 1,
-    st.session_state.move_index,
-    label_visibility="collapsed"
-)
-if new_index != st.session_state.move_index:
-    st.session_state.move_index = new_index
+        # Get legal moves for hints
+        legal_moves = [board.san(move) for move in board.legal_moves]
 
-st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            user_input = st.text_input("Your move (e.g., Nf3, e4):", key="random_guess")
 
-# Board visualization section
-st.subheader("♟️ Board Position")
+        with col2:
+            if st.button("Check Answer"):
+                correct_move = moves_only[test_index]
+                if user_input.strip() == correct_move:
+                    st.success(f"✅ Correct! The move is {correct_move}")
+                    st.session_state.quiz_correct += 1
+                    st.session_state.quiz_total += 1
+                else:
+                    st.error(f"❌ Incorrect. The correct move is: {correct_move}")
+                    st.session_state.quiz_total += 1
+                st.session_state.show_answer = True
 
-# Create board and apply moves
-board = chess.Board()
-moves_to_apply = moves_only[:st.session_state.move_index + 1]
+        if st.session_state.show_answer:
+            st.info(f"The opening continues: {' '.join(moves_only[test_index:min(test_index+3, len(moves_only))])}...")
 
-try:
-    for move in moves_to_apply:
-        board.push_san(move)
+        st.markdown(f"**Score: {st.session_state.quiz_correct}/{st.session_state.quiz_total}** ({int(st.session_state.quiz_correct/max(st.session_state.quiz_total,1)*100)}%)")
 
-    # Display board - responsive sizing
-    board_svg = chess.svg.board(board, size=450)
-    st.image(board_svg, use_container_width=True)
+# QUIZ MODE
+elif mode == "🎯 Quiz":
+    st.markdown("### 🎯 Quiz Mode - Guess the Next Move")
 
-    # Show moves played
-    if moves_to_apply:
-        st.caption(f"Moves: {' '.join(moves_to_apply)}")
-
-except Exception as e:
-    st.error(f"Error displaying board: {e}")
-    st.text("Board display requires valid chess moves")
-
-# Auto-play controls below the board
-auto_col1, auto_col2 = st.columns([1, 3])
-
-with auto_col1:
-    if st.session_state.auto_play:
-        if st.button("⏸️ Pause", key="pause_auto", use_container_width=True):
-            st.session_state.auto_play = False
+    if st.session_state.move_index >= len(moves_only) - 1:
+        st.success("🎉 You've completed this opening!")
+        if st.button("Start Over"):
+            st.session_state.move_index = 0
+            st.session_state.show_answer = False
             st.rerun()
     else:
-        if st.button("▶️ Auto Play", key="start_auto", use_container_width=True):
-            st.session_state.auto_play = True
+        # Show current position
+        board = chess.Board()
+        for move in moves_only[:st.session_state.move_index + 1]:
+            board.push_san(move)
+
+        st.markdown(f"**Move {st.session_state.move_index + 2} of {len(moves_only)}**")
+
+        board_svg = chess.svg.board(board, size=450)
+        st.image(board_svg, use_container_width=True)
+
+        st.caption(f"Moves so far: {' '.join(moves_only[:st.session_state.move_index + 1])}")
+
+        if not st.session_state.show_answer:
+            col1, col2, col3 = st.columns([2, 1, 1])
+
+            with col1:
+                guess = st.text_input("What's the next move?", key="quiz_input")
+
+            with col2:
+                if st.button("✅ Check", use_container_width=True):
+                    correct_move = moves_only[st.session_state.move_index + 1]
+                    if guess.strip() == correct_move:
+                        st.session_state.quiz_correct += 1
+                        st.session_state.quiz_total += 1
+                        st.session_state.show_answer = True
+                        st.session_state.user_guess = guess.strip()
+                        st.rerun()
+                    else:
+                        st.session_state.quiz_total += 1
+                        st.session_state.show_answer = True
+                        st.session_state.user_guess = guess.strip()
+                        st.rerun()
+
+            with col3:
+                if st.button("💡 Reveal", use_container_width=True):
+                    st.session_state.show_answer = True
+                    st.rerun()
+
+        else:
+            correct_move = moves_only[st.session_state.move_index + 1]
+
+            if st.session_state.user_guess == correct_move:
+                st.success(f"✅ Correct! The move is **{correct_move}**")
+            elif st.session_state.user_guess:
+                st.error(f"❌ You guessed: {st.session_state.user_guess}")
+                st.info(f"The correct move is: **{correct_move}**")
+            else:
+                st.info(f"The correct move is: **{correct_move}**")
+
+            # Show the idea behind this move if available
+            for idea in opening_data["key_ideas"]:
+                move_num = st.session_state.move_index + 2
+                if f"Move {move_num}." in idea or f"Move {move_num}:" in idea:
+                    st.markdown(f"💡 **Key idea:** {idea}")
+
+            if st.button("➡️ Next Move"):
+                st.session_state.move_index += 1
+                st.session_state.show_answer = False
+                st.session_state.user_guess = ""
+                st.rerun()
+
+        st.markdown(f"**Quiz Score: {st.session_state.quiz_correct}/{st.session_state.quiz_total}** ({int(st.session_state.quiz_correct/max(st.session_state.quiz_total,1)*100)}%)")
+
+# STUDY MODE
+else:
+    st.markdown("### 🎮 Move Navigation")
+    st.markdown(f"**Move {st.session_state.move_index + 1} of {len(moves_only)}**")
+
+    # Navigation buttons in a single HTML row for guaranteed horizontal layout
+    button_html = f"""
+    <style>
+    .nav-buttons {{
+        display: flex;
+        justify-content: space-between;
+        gap: 5px;
+        margin-bottom: 10px;
+    }}
+    .nav-buttons button {{
+        flex: 1;
+        padding: 10px;
+        font-size: 20px;
+        background-color: #262730;
+        color: white;
+        border: 1px solid #464646;
+        border-radius: 5px;
+        cursor: pointer;
+    }}
+    .nav-buttons button:hover {{
+        background-color: #464646;
+    }}
+    </style>
+    """
+    st.markdown(button_html, unsafe_allow_html=True)
+
+    # Actual buttons using Streamlit columns with gap control
+    btn_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1], gap="small")
+
+    with btn_cols[0]:
+        if st.button("⏮️ Start", key="start", use_container_width=True):
+            st.session_state.move_index = 0
             st.rerun()
 
-with auto_col2:
-    speed = st.select_slider(
-        "Speed",
-        options=[0.5, 1.0, 1.5, 2.0, 3.0],
-        value=1.5,
-        format_func=lambda x: f"{x}s per move",
+    with btn_cols[2]:
+        if st.button("◀️ Prev", key="prev", use_container_width=True):
+            if st.session_state.move_index > 0:
+                st.session_state.move_index -= 1
+                st.rerun()
+
+    with btn_cols[4]:
+        if st.button("Next ▶️", key="next", use_container_width=True):
+            if st.session_state.move_index < len(moves_only) - 1:
+                st.session_state.move_index += 1
+                st.rerun()
+
+    with btn_cols[6]:
+        if st.button("End ⏭️", key="end", use_container_width=True):
+            st.session_state.move_index = len(moves_only) - 1
+            st.rerun()
+
+    # Slider below buttons for precise control
+    new_index = st.slider(
+        "Jump to move",
+        0,
+        len(moves_only) - 1,
+        st.session_state.move_index,
         label_visibility="collapsed"
     )
+    if new_index != st.session_state.move_index:
+        st.session_state.move_index = new_index
 
-# Auto-play logic
-if st.session_state.auto_play:
-    if st.session_state.move_index < len(moves_only) - 1:
-        time.sleep(speed)
-        st.session_state.move_index += 1
-        st.rerun()
-    else:
-        # Reached the end, stop auto-play
-        st.session_state.auto_play = False
-        st.rerun()
+    st.markdown("---")
 
-st.markdown("---")
+    # Board visualization section
+    st.subheader("♟️ Board Position")
 
-# Collapsible sections for ideas and plan - better for mobile
-with st.expander("🎯 Key Ideas", expanded=False):
-    for idea in opening_data["key_ideas"]:
-        st.markdown(f"- {idea}")
+    # Create board and apply moves
+    board = chess.Board()
+    moves_to_apply = moves_only[:st.session_state.move_index + 1]
 
-with st.expander("📋 Your Plan", expanded=False):
-    st.info(opening_data["plan"])
+    try:
+        for move in moves_to_apply:
+            board.push_san(move)
 
-with st.expander("♟️ Full Move Sequence", expanded=False):
-    st.code(opening_data["moves"], language=None)
+        # Display board - responsive sizing
+        board_svg = chess.svg.board(board, size=450)
+        st.image(board_svg, use_container_width=True)
 
-with st.expander("⚙️ Technical Details", expanded=False):
-    st.text(f"FEN: {board.fen()}")
+        # Show moves played
+        if moves_to_apply:
+            st.caption(f"Moves: {' '.join(moves_to_apply)}")
+
+    except Exception as e:
+        st.error(f"Error displaying board: {e}")
+        st.text("Board display requires valid chess moves")
+
+    # Auto-play controls below the board
+    auto_col1, auto_col2 = st.columns([1, 3])
+
+    with auto_col1:
+        if st.session_state.auto_play:
+            if st.button("⏸️ Pause", key="pause_auto", use_container_width=True):
+                st.session_state.auto_play = False
+                st.rerun()
+        else:
+            if st.button("▶️ Auto Play", key="start_auto", use_container_width=True):
+                st.session_state.auto_play = True
+                st.rerun()
+
+    with auto_col2:
+        speed = st.select_slider(
+            "Speed",
+            options=[0.5, 1.0, 1.5, 2.0, 3.0],
+            value=1.5,
+            format_func=lambda x: f"{x}s per move",
+            label_visibility="collapsed"
+        )
+
+    # Auto-play logic
+    if st.session_state.auto_play:
+        if st.session_state.move_index < len(moves_only) - 1:
+            time.sleep(speed)
+            st.session_state.move_index += 1
+            st.rerun()
+        else:
+            # Reached the end, stop auto-play
+            st.session_state.auto_play = False
+            st.rerun()
+
+    st.markdown("---")
+
+    # Collapsible sections for ideas and plan - better for mobile
+    with st.expander("🎯 Key Ideas", expanded=False):
+        for idea in opening_data["key_ideas"]:
+            st.markdown(f"- {idea}")
+
+    with st.expander("📋 Your Plan", expanded=False):
+        st.info(opening_data["plan"])
+
+    with st.expander("♟️ Full Move Sequence", expanded=False):
+        st.code(opening_data["moves"], language=None)
+
+    with st.expander("⚙️ Technical Details", expanded=False):
+        st.text(f"FEN: {board.fen()}")
 
 # Footer
 st.markdown("---")
 st.caption("""
-**Remember:** Understanding beats memorization • Don't hang pieces - tactics are still #1 priority
+**Remember:** Active practice beats passive study • Quiz yourself regularly • Mark openings as mastered when confident
 """)
