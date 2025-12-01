@@ -506,22 +506,27 @@ elif st.session_state.page == 'training':
         cols = st.columns([1,1,1,1,1,1,1,1], gap="small")
         if cols[0].button("⏮️", key="start", use_container_width=True):
             st.session_state.move_idx = 0
+            st.session_state.auto_play = False  # Pause auto-play on manual navigation
             st.rerun()
         if cols[2].button("◀️", key="prev", use_container_width=True):
             if st.session_state.move_idx > 0:
                 st.session_state.move_idx -= 1
+                st.session_state.auto_play = False  # Pause auto-play on manual navigation
                 st.rerun()
         if cols[4].button("▶️", key="next", use_container_width=True):
             if st.session_state.move_idx < len(moves) - 1:
                 st.session_state.move_idx += 1
+                st.session_state.auto_play = False  # Pause auto-play on manual navigation
                 st.rerun()
         if cols[6].button("⏭️", key="end", use_container_width=True):
             st.session_state.move_idx = len(moves) - 1
+            st.session_state.auto_play = False  # Pause auto-play on manual navigation
             st.rerun()
 
         new_idx = st.slider("Jump", 0, len(moves)-1, st.session_state.move_idx, label_visibility="collapsed")
         if new_idx != st.session_state.move_idx:
             st.session_state.move_idx = new_idx
+            st.session_state.auto_play = False  # Pause auto-play on manual navigation
 
         # Board
         board = chess.Board()
